@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script>
+        function createMutex() {
+            let islocked = false;
+            let waitingList = [];
+            return {
+                lock: function() {
+                    if (islocked == false) {
+                        islocked = true;
+                        return new Promise(r => r());
+                    } else
+                        return new Promise(r => waitingList.push(r));
+                },
+                unlock: function() {
+                    if (waitingList.length > 0)
+                        waitingList.shift()();
+                    else
+                        islocked = false;
+                }
+            };
+        }
+
+        function createCV() {
+            let waitingList = [];
+            return {
+                wait: async function(mutex) {
+                    mutex.unlock();
+                    await new Promise(r => waitingList.push(r));
+                    await mutex.lock();
+                },
+                notifyAll: function() {
+                    while(waitingList.length > 0)
+                        waitingList.shift()();
+                }
+            };
+        }
+
+        let tasks = [];
+        let mutex = createMutex();
+        let cv = createCV();
+        async function downloadWorker() {
+            for(;;) {
+                let task = undefined;
+
+                await mutex.lock();
+                while(tasks.length == 0)
+                    await cv.wait(mutex);
+                task = tasks.shift();
+                mutex.unlock();
+
+                await task.func();
+            }
+        }
+
+        let delayLoadList = [];
+
+        async function restartResolveImg() {
+            await mutex.lock();
+            tasks = [];
+            cv.notifyAll();
+            mutex.unlock();
+        }
+
+        async function resolveImg(imgTag) {
+            await mutex.lock();
+            tasks.push({
+                taskid: imgTag.tagId,
+                func: async ()=> {
+                    delayLoadList = delayLoadList.filter(img => img.tagid !== imgTag.tagid);
+                    let blob = await (await fetch(imgTag.delayload)).blob();
+                    imgTag.src = URL.createObjectURL(blob);
+                }
+            });
+            cv.notifyAll();
+            mutex.unlock();
+            return;
+        }
+
+        downloadWorker();
+    </script>
+    <script>
+        async function on_scroll() {
+            await restartResolveImg();
+
+            let offset = document.documentElement.scrollTop;
+            let height = document.documentElement.clientHeight;
+            let middle = offset + height / 2;
+            await mutex.lock();
+            delayLoadList
+                .map(x => {
+                    if (x.offsetTop < offset + height || x.offsetTop + x.clientHeight < offset) {
+                        let distance = Math.abs(x.offsetTop + x.clientHeight / 2 - middle);
+                        return ({ dist: distance, elem: x});
+                    } else
+                        return undefined;
+
+                })
+                .filter(x => x !== undefined)
+                .sort((lhs, rhs) => lhs.dist - rhs.dist)
+                .forEach(x => resolveImg(x.elem));
+            cv.notifyAll();
+            mutex.unlock();
+        }
+
+        function add_images() {
+            for(let i = 1; i <= 24; ++i) {
+                let img = document.createElement("img");
+
+                img.delayload = i.toString() + ".jpg";
+                img.tagid = "img_" + i.toString();
+                img.isWorking = false;
+
+                img.style.width = document.body.clientWidth + "px";
+                img.style.height = (document.body.clientWidth * 9 / 16) + "px";
+                delayLoadList.push(img);
+                document.body.appendChild(img);
+            }
+
+            on_scroll();
+        }
+    </script>
+</head>
+<body onload="add_images()" onscroll="on_scroll()">
+</body>
+</html>

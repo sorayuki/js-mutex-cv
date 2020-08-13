@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script>
+        let delayLoadList = [];
+
+        function on_scroll() {
+            let inViewList = [];
+            let outViewList = [];
+            let offset = document.documentElement.scrollTop;
+            let height = document.documentElement.clientHeight;
+            delayLoadList.forEach(x => {
+                if (x.offsetTop > offset + height || x.offsetTop + x.clientHeight < offset)
+                    outViewList.push(x);
+                else
+                    inViewList.push(x);
+            });
+            delayLoadList = outViewList;
+            inViewList.forEach(x => {
+                x.src = x.delayload;
+            });
+        }
+
+        function add_images() {
+            for(let i = 1; i <= 24; ++i) {
+                let img = document.createElement("img");
+                let attr = document.createAttribute("delayload");
+                img.delayload = i.toString() + ".jpg";
+                img.style.width = document.body.clientWidth + "px";
+                img.style.height = (document.body.clientWidth * 9 / 16) + "px";
+                delayLoadList.push(img);
+                document.body.appendChild(img);
+            }
+
+            on_scroll();
+        }
+    </script>
+</head>
+<body onload="add_images()" onscroll="on_scroll()">
+</body>
+</html>
