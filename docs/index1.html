@@ -37,8 +37,14 @@
 
             on_scroll();
         }
+
+        let beginTime = performance.now();
+        setInterval(()=> {
+            document.getElementById("time-cost").textContent = ((performance.now() - beginTime) / 1000).toString();
+        }, 100);
     </script>
 </head>
 <body onload="add_images()" onscroll="on_scroll()">
+    <div style="position: fixed; background-color: white; top: 0; left: 0; width: max-content; height: max-content;" id="time-cost"></div>
 </body>
 </html>
